@@ -8,10 +8,10 @@ __pycache__/
 *.env
 
 # Ignore Streamlit secrets
-.streamlit/secrets.toml
+membership-helper/.streamlit/secrets.toml
 
 # Ignore virtual environment
-.venv/
+membership-helper/.venv/
 
 # Ignore IDE settings
 .vscode/
