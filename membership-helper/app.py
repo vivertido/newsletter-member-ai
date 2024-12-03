@@ -19,4 +19,4 @@ HEADERS = {
 
 
 st.title("Cityside Membership Helper")
-st.write("Now with supabase!")
+st.write("Now with supabase folks!!")

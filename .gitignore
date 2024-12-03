@@ -17,4 +17,4 @@ membership-helper/.venv/
 .vscode/
 .idea/
 
-output/
+membership-helper/output/
