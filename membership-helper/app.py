@@ -1,8 +1,8 @@
 import streamlit as st
 
-
 if not st.session_state.get("authenticated", False):
     st.error("You must log in to access this page.")
+    st.switch_page("pages/login.py")
     st.stop()  # Stop further execution of the page
 
 API_KEY = st.secrets["API_KEY"]
