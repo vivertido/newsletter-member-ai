@@ -70,7 +70,7 @@ def fetch_and_export_subscribers(list_id, temp_dir="temp"):
 
             response_list.extend(response["members"])
             
-            print(len(response_list))
+            #print(len(response_list))
 
             # Check if all members have been fetched
             if len(response["members"]) < count:
@@ -79,21 +79,22 @@ def fetch_and_export_subscribers(list_id, temp_dir="temp"):
             offset += count  # Move to the next batch
 
         # Export data to a JSON file
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        output_path = f"{temp_dir}/subscribers_{list_id}.json"
+       # timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+       # output_path = f"{temp_dir}/subscribers_{list_id}.json"
+        output_file = f"{temp_dir}/subscribers_{list_id}.json"
 
 
-        with open(output_path, "w") as f:
+        with open(output_file, "w") as f:
             json.dump(response_list, f, indent=4)
 
-        print(f"Exported subscribers to {output_path}")
-        return output_path
+        print(f"Exported subscribers to {output_file}")
+        return output_file
 
     except ApiClientError as error:
         print(f"Mailchimp API Error: {error.text}")
         return None
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred while exporting subscribers: {e}")
         return None
 
 def get_mc_subscribers_by_list_id(list_id):

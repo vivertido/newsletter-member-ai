@@ -1,6 +1,9 @@
 import streamlit as st
-from db import get_total_subscribers, fetch_subscribers
+from db import get_total_subscribers, fetch_subscribers, fetch_subscribers_sorted_by_clicks, fetch_all_newsletters
+from chimp.member_clicks import get_member_activity
 from datetime import datetime, timedelta
+from utils import extract_slug_from_url, get_post_details, clean_headline
+
 
 st.title("Member Data")
 st.markdown("Fetch and display subscriber data based on criteria.")
@@ -9,31 +12,70 @@ st.markdown("Fetch and display subscriber data based on criteria.")
 total_subscribers = get_total_subscribers()
 st.write(f"**Total Subscribers:** {total_subscribers}")
 
-# Filters for fetching subscribers
-st.subheader("Filters")
-number_of_results = st.number_input("Number of Results", min_value=1, max_value=total_subscribers, value=10)
-created_after = st.date_input(
-    "Created After",
-    value=(datetime.now() - timedelta(days=30)),  # Default to 30 days ago
-    min_value=datetime(2000, 1, 1),
-    max_value=datetime.now()
-)
+# Tabs for different filters
+tab1, tab2 = st.tabs(["By Date Created", "Explore member clicks"])
 
-# Fetch subscribers on button click
-if st.button("Get Subscribers"):
-    # Convert date input to ISO format
-    created_after_iso = created_after.isoformat()
+# Tab 1: Search by Date Created
+with tab1:
+    st.subheader("Search by Date Created")
+    number_of_results = st.number_input("Number of Results", min_value=1, max_value=total_subscribers, value=10)
+    created_after = st.date_input(
+        "Created After",
+        value=(datetime.now() - timedelta(days=30)),  # Default to 30 days ago
+        min_value=datetime(2000, 1, 1),
+        max_value=datetime.now()
+    )
 
-    # Fetch subscribers
-    subscribers = fetch_subscribers(limit=number_of_results, created_after=created_after_iso)
+    if st.button("Get Subscribers by Date"):
+        # Convert date input to ISO format
+        created_after_iso = created_after.isoformat()
 
-    # Display results
-    if subscribers:
-        for subscriber in subscribers:
-            if subscriber.get("created_at"):
-                subscriber["created_at"] = datetime.fromisoformat(subscriber["created_at"]).strftime("%B %d, %Y %I:%M %p")
-        
-        st.write(f"Fetched {len(subscribers)} subscribers:")
-        st.table(subscribers)
-    else:
-        st.info("No subscribers found matching the criteria.")
+        # Fetch subscribers
+        subscribers = fetch_subscribers(limit=number_of_results, created_after=created_after_iso)
+
+        # Display results
+        if subscribers:
+            for subscriber in subscribers:
+                if subscriber.get("created_at"):
+                    subscriber["created_at"] = datetime.fromisoformat(subscriber["created_at"]).strftime("%B %d, %Y %I:%M %p")
+            
+            st.write(f"Fetched {len(subscribers)} subscribers:")
+            st.table(subscribers)
+        else:
+            st.info("No subscribers found matching the criteria.")
+
+with tab2:
+    st.subheader("Debug Click Activity")
+
+    # Input for Subscriber Hash and List ID
+    subscriber_hash = st.text_input("Enter Subscriber Hash")
+    list_id = st.text_input("Enter List ID")
+
+    # Submit Button
+    if st.button("Fetch Click Activity"):
+        if not subscriber_hash or not list_id:
+            st.error("Please enter both subscriber hash and list ID.")
+        else:
+            # Fetch click activity for the subscriber
+            activity = get_member_activity(list_id=list_id, subscriber=subscriber_hash)
+
+            if activity and "activity" in activity:
+                clicks = [act for act in activity["activity"] if act["action"] == "click"]
+                st.success(f"Found {len(clicks)} click events for subscriber {subscriber_hash}. Check console for details.")
+                #print(f"Click Activity for {subscriber_hash}: {clicks}")
+                print ("_____________________________")
+
+                for click in clicks:
+                        slug = extract_slug_from_url(click.get("url", ""))
+                        print(f"member activity: Got this slug: {slug}")
+                        if not slug or slug == "unknown":
+                            print(f"Skipped invalid slug for Subscriber {subscriber_hash}: {slug}")
+
+                        headline= get_post_details(slug, list_id)
+                        headline= clean_headline(headline)
+                        print(f"Headline: {headline}" )
+                             
+                        
+
+            else:
+                st.warning(f"No click activity found for subscriber {subscriber_hash}.") 

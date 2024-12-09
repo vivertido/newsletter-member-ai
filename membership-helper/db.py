@@ -25,13 +25,14 @@ def fetch_all_newsletters():
     Returns:
         list: A list of newsletter records.
     """
-    response = supabase.table("newsletters").select("*").execute()
-    if response.data:
-        return response.data
-    else:
-        print("Error fetching newsletters:", response.error)
+    try:
+        response = supabase.table("newsletters").select("*").execute()
+        return response.data if response.data else []
+    except Exception as e:
+        print(f"An error occurred while fetching newsletters: {e}")
         return []
     
+
 def newsletter_exists(list_id):
     """
     Check if a newsletter with the given list_id exists.
@@ -170,10 +171,8 @@ def add_new_subscribers(subscribers):
     """
     try:
         response = supabase.table("subscribers").upsert(
-            subscribers,
-            on_conflict="subscriber_hash"  # Specify the unique constraint
+            subscribers, on_conflict="subscriber_hash"
         ).execute()
-
         if response.data:
             print(f"Added or updated {len(response.data)} subscribers.")
             return True
@@ -233,52 +232,103 @@ def remove_missing_subscribers(subscriber_hashes_to_keep, batch_size=100):
         print(f"An unexpected error occurred while removing subscribers: {e}")
         return False
     
-def mark_missing_subscribers_as_deleted(subscriber_hashes_to_keep):
+def mark_missing_subscribers_as_deleted(subscriber_hashes_to_keep, batch_size=100):
     """
     Mark subscribers as 'deleted' in the database if their hashes are not in the given list.
 
     Args:
         subscriber_hashes_to_keep (list): List of current subscriber hashes to keep.
+        batch_size (int): Number of records to process in each batch.
 
     Returns:
-        bool: True if the operation was successful, False otherwise.
+        list: List of subscriber hashes marked as deleted.
     """
     try:
         # Fetch all subscriber hashes currently in the database
         response = supabase.table("subscribers").select("subscriber_hash").execute()
         if not response.data:
-            print("No subscribers found in the database to mark as deleted.")
-            return True
+            print("No subscribers found in the database to compare.")
+            return []
 
         current_hashes_in_db = {row["subscriber_hash"] for row in response.data}
-        print(f"Current hashes in DB: {len(current_hashes_in_db)}")
-
-        # Identify hashes to mark as deleted
         hashes_to_mark_deleted = list(current_hashes_in_db - set(subscriber_hashes_to_keep))
+
         print(f"Hashes to keep: {len(subscriber_hashes_to_keep)}")
         print(f"Hashes to mark as deleted: {len(hashes_to_mark_deleted)}")
 
         if not hashes_to_mark_deleted:
             print("No subscribers to mark as deleted.")
-            return True
+            return []
 
-        # Mark these hashes as deleted
-        response = supabase.table("subscribers").update(
-            {"status": "deleted"}
-        ).in_("subscriber_hash", hashes_to_mark_deleted).execute()
+        # Process deletion in batches
+        total_removed = 0
+        for i in range(0, len(hashes_to_mark_deleted), batch_size):
+            batch = hashes_to_mark_deleted[i : i + batch_size]
+            try:
+                response = supabase.table("subscribers").update(
+                    {"status": "deleted"}
+                ).in_("subscriber_hash", batch).execute()
 
-        if response.data:
-            print(f"Marked {len(response.data)} subscribers as deleted.")
-            return True
-        else:
-            print("Error marking subscribers as deleted:", response.error)
-            return False
+                removed_count = len(response.data) if response.data else 0
+                total_removed += removed_count
+                print(f"Batch {i // batch_size + 1}: Marked {removed_count} subscribers as deleted.")
+            except Exception as e:
+                print(f"Error marking subscribers as deleted in batch {i // batch_size + 1}: {e}")
+
+        print(f"Total subscribers marked as deleted: {total_removed}")
+        return hashes_to_mark_deleted
     except Exception as e:
         print(f"An unexpected error occurred while marking subscribers as deleted: {e}")
+        return []
+
+
+def sync_subscriber_list_id(subscriber_hash, list_id):
+    """
+    Update or append the list_id for a subscriber in the database.
+
+    Args:
+        subscriber_hash (str): The unique hash of the subscriber.
+        list_id (str): The new list ID to add.
+
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    try:
+        # Fetch the current list_id array for the subscriber
+        response = supabase.table("subscribers").select("list_id").eq("subscriber_hash", subscriber_hash).execute()
+
+        if response.data:
+            current_list_ids = response.data[0]["list_id"] or []
+
+            if list_id not in current_list_ids:
+                current_list_ids.append(list_id)
+                update_response = supabase.table("subscribers").update(
+                    {"list_id": current_list_ids}
+                ).eq("subscriber_hash", subscriber_hash).execute()
+
+                if update_response.data:
+                    print(f"Appended list_id '{list_id}' for subscriber {subscriber_hash}.")
+                    return True
+                else:
+                    print(f"Error appending list_id for subscriber {subscriber_hash}: {update_response.error}")
+                    return False
+            else:
+                print(f"List ID '{list_id}' already exists for subscriber {subscriber_hash}. No update needed.")
+                return True
+        else:
+            # Insert new subscriber
+            supabase.table("subscribers").insert(
+                {
+                    "subscriber_hash": subscriber_hash,
+                    "list_id": [list_id],
+                    "status": "subscribed"
+                }
+            ).execute()
+            print(f"Inserted new subscriber {subscriber_hash} with list_id '{list_id}'.")
+            return True
+    except Exception as e:
+        print(f"An error occurred while updating list_id for subscriber {subscriber_hash}: {e}")
         return False
-
-
-
 
 
 
@@ -314,14 +364,11 @@ def fetch_click_activity(start_date=None, end_date=None, newsletter=None, limit=
         query = query.order("click_date", desc=True).limit(limit)
         response = query.execute()
 
-        if response.data:
-            return response.data
-        else:
-            print("Error fetching click activity:", response.error)
-            return []
+        # Return data directly if available
+        return response.data if response.data else []
 
     except Exception as e:
-        print(f"An unexpected error occurred while fetching click activity: {e}")
+        print(f"An unexpected error occurred while fetching click activity--> {e}")
         return []
     
 def fetch_most_popular_headline(start_date=None, end_date=None):
@@ -371,3 +418,76 @@ def get_all_newsletter_names():
     else:
         print("Error fetching newsletters:", response.error)
         return {}
+    
+def update_total_clicks(subscriber_hash, total_clicks):
+    """
+    Updates the total_clicks column for a specific subscriber.
+
+    Args:
+        subscriber_hash (str): The unique hash of the subscriber.
+        total_clicks (int): The total number of clicks to update.
+    """
+    response = supabase.table("subscribers").update(
+        {"total_clicks": total_clicks}
+    ).eq("subscriber_hash", subscriber_hash).execute()
+
+    if response.data:
+        print(f"Updated total_clicks for subscriber {subscriber_hash}: {total_clicks}")
+    else:
+        print(f"Error updating total_clicks for subscriber {subscriber_hash}: {response.error}")
+
+def insert_click_activity(subscriber_hash, clicked_headline, newsletter, click_date):
+    """
+    Inserts a click activity record into the click_activity table.
+
+    Args:
+        subscriber_hash (str): The subscriber's unique hash.
+        clicked_headline (str): The headline of the clicked article.
+        newsletter (str): The newsletter name or list ID.
+        click_date (str): The date of the click in ISO 8601 format.
+    """
+    try:
+        response = supabase.table("click_activity").insert(
+            {
+                "subscriber_hash": subscriber_hash,
+                "clicked_headline": clicked_headline,
+                "newsletter": newsletter,
+                "click_date": click_date,
+            }
+        ).execute()
+
+        if response.data:
+            print(f"Click activity inserted: {response.data}")
+        else:
+            print(f"Error inserting click activity: {response.error}")
+
+    except Exception as e:
+        print(f"An error occurred while inserting click activity: {e}")
+
+
+
+
+def fetch_subscribers_sorted_by_clicks(list_id, limit=100):
+    """
+    Fetch subscribers for a specific newsletter, sorted by total_clicks in descending order.
+
+    Args:
+        list_id (str): The newsletter list ID.
+        limit (int): The maximum number of subscribers to fetch.
+
+    Returns:
+        list: A list of subscribers sorted by total_clicks.
+    """
+    try:
+        response = supabase.table("subscribers").select(
+            "subscriber_hash, total_clicks"
+        ).filter("list_id", "cs", f"{{{list_id}}}").execute()
+        
+        if response.data:
+            return response.data
+        else:
+            print(f"No data returned for list {list_id}.")
+            return []
+    except Exception as e:
+        print(f"An unexpected error occurred while fetching subscribers: {e}")
+        return []
