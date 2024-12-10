@@ -1,7 +1,7 @@
 import streamlit as st
 from db import fetch_click_activity, insert_click_activity, update_total_clicks, fetch_most_popular_headline, fetch_most_popular_headline, fetch_subscribers_sorted_by_clicks, fetch_all_newsletters, get_all_newsletter_names
 from datetime import datetime, timedelta
-from tasks import process_subscriber_clicks
+from tasks import process_subscriber_clicks, process_click_activity
 from chimp.member_clicks import get_member_activity
 from utils import extract_slug_from_url, get_post_details, clean_headline
 
@@ -120,67 +120,26 @@ with tab2:
                 total_subscribers = len(subscribers)
                 progress_bar = st.progress(0)
 
-                # Fetch click activity for each subscriber
-                processed_count = 0
-                skipped_count = 0
-                error_count = 0
+    
 
                 for idx, subscriber in enumerate(subscribers, start=1):
                     subscriber_hash = subscriber["subscriber_hash"]
-                    activity = get_member_activity(list_id, subscriber_hash)
 
-                    if not activity or "activity" not in activity:
-                        print(f"No activity data for Subscriber {subscriber_hash}")
-                        skipped_count += 1
-                        continue
 
-                    # Process click events
-                    clicks = [act for act in activity["activity"] if act["action"] == "click"]
-                    total_clicks = 0
+                     # Call process_click_activity for the current subscriber
+                    result = process_click_activity(list_id, subscriber_hash)
+                    
+                    if result.get("processed_count", 0) > 0:
+                        st.success(f"Processed {result['processed_count']} clicks for subscriber {subscriber_hash}.")
+                    if result.get("skipped_count", 0) > 0:
+                        st.warning(f"Skipped {result['skipped_count']} invalid clicks for subscriber {subscriber_hash}.")
+                    if result.get("error_count", 0) > 0:
+                        st.error(f"Encountered {result['error_count']} errors for subscriber {subscriber_hash}.")
 
-                    for click in clicks:
-                        slug = extract_slug_from_url(click.get("url", ""))
-                        if not slug or slug == "unknown":
-                            print(f"Skipped invalid slug for Subscriber {subscriber_hash}: {slug}")
-                            skipped_count += 1
-                            continue
-
-                        post_details = get_post_details(slug, list_id)
-
-                        if not post_details:
-                            print(f"No headline available. Saving slug instead: {slug}.")
-                            post_details = slug  # Fallback to slug if headline is not available
-                            continue
-
-                       
-                        else: post_details = clean_headline(post_details) 
-
-                         # Insert click activity into the database
-                        try:
-                            insert_click_activity(
-                                subscriber_hash=subscriber_hash,
-                                clicked_headline=post_details,
-                                newsletter=list_id,
-                                click_date=click["timestamp"]
-                            )
-                            total_clicks += 1
-                            processed_count += 1
-                        except Exception as e:
-                            print(f"Error inserting click activity for Subscriber {subscriber_hash}: {e}")
-                            error_count += 1
-
-                    # Update total clicks for the subscriber
-                    try:
-                        update_total_clicks(subscriber_hash, total_clicks)
-                    except Exception as e:
-                        print(f"Error updating total clicks for Subscriber {subscriber_hash}: {e}")
-                        error_count += 1
 
                     # Update progress bar
                     progress_percentage = int((idx / total_subscribers) * 100)
                     progress_bar.progress(progress_percentage)
 
-                # Display results
-                st.success(f"Processed {processed_count} clicks.")
-                st.warning(f"Skipped {skipped_count} invalid or duplicate clicks.")
-                st.error(f"Encountered {error_count} errors.")
+                # success
+                st.success("Finished processing click activity.")

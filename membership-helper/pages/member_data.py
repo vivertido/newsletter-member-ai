@@ -3,6 +3,7 @@ from db import get_total_subscribers, fetch_subscribers, fetch_subscribers_sorte
 from chimp.member_clicks import get_member_activity
 from datetime import datetime, timedelta
 from utils import extract_slug_from_url, get_post_details, clean_headline
+from tasks import process_click_activity
 
 
 st.title("Member Data")
@@ -57,25 +58,15 @@ with tab2:
             st.error("Please enter both subscriber hash and list ID.")
         else:
             # Fetch click activity for the subscriber
-            activity = get_member_activity(list_id=list_id, subscriber=subscriber_hash)
+            result = process_click_activity(list_id, subscriber_hash)
 
-            if activity and "activity" in activity:
-                clicks = [act for act in activity["activity"] if act["action"] == "click"]
-                st.success(f"Found {len(clicks)} click events for subscriber {subscriber_hash}. Check console for details.")
-                #print(f"Click Activity for {subscriber_hash}: {clicks}")
-                print ("_____________________________")
+            if result.get("processed_count", 0) > 0:
+                    st.success(f"Processed {result['processed_count']} clicks for subscriber {subscriber_hash}.")
+                    if result.get("skipped_count", 0) > 0:
+                        st.warning(f"Skipped {result['skipped_count']} invalid clicks for subscriber {subscriber_hash}.")
+                    if result.get("error_count", 0) > 0:
+                        st.error(f"Encountered {result['error_count']} errors for subscriber {subscriber_hash}.")
 
-                for click in clicks:
-                        slug = extract_slug_from_url(click.get("url", ""))
-                        print(f"member activity: Got this slug: {slug}")
-                        if not slug or slug == "unknown":
-                            print(f"Skipped invalid slug for Subscriber {subscriber_hash}: {slug}")
+            st.success("Finished processing click activity.")
 
-                        headline= get_post_details(slug, list_id)
-                        headline= clean_headline(headline)
-                        print(f"Headline: {headline}" )
-                             
-                        
-
-            else:
-                st.warning(f"No click activity found for subscriber {subscriber_hash}.") 
+            

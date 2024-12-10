@@ -491,3 +491,24 @@ def fetch_subscribers_sorted_by_clicks(list_id, limit=100):
     except Exception as e:
         print(f"An unexpected error occurred while fetching subscribers: {e}")
         return []
+    
+
+def fetch_existing_clicks(subscriber_hash):
+    """
+    Fetch all existing clicked slugs for a subscriber.
+
+    Args:
+        subscriber_hash (str): The unique hash of the subscriber.
+
+    Returns:
+        set: A set of slugs that have already been clicked by the subscriber.
+    """
+    try:
+        response = supabase.table("click_activity").select("clicked_headline").eq("subscriber_hash", subscriber_hash).execute()
+        if response.data:
+            return {row["clicked_headline"] for row in response.data}
+        else:
+            return set()
+    except Exception as e:
+        print(f"Error fetching existing clicks for Subscriber {subscriber_hash}: {e}")
+        return set()
