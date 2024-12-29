@@ -54,6 +54,33 @@ Sync newsletter audience members and generate emails based on their headline cli
     SB_URL = "your_supabase_url"
     SB_KEY = "your_supabase_key"
     ```
+5. Find your Newsletter IDs from your Mailchimp account (10 character alphanumeric)
+6. Get your Wordpress site URL for the WP API to fetch headlines from slugs. For example: `https://richmondside.org/wp-json/wp/v2/posts?slug=`
+7. Create Supabase account and project and structure your tables as shown below:
+
+## Supabase Schema
+
+The Supabase database schema consists of the following three tables:
+
+1. **subscribers**: Stores subscriber information.
+    - `id`: Unique identifier for the subscriber.
+    - `email`: Email address of the subscriber.
+    - `name`: Name of the subscriber.
+    - `status`: Subscription status (e.g., subscribed, unsubscribed).
+
+2. **click_activity**: Stores click activity data for subscribers.
+    - `id`: Unique identifier for the click activity.
+    - `subscriber_id`: Foreign key referencing the subscriber.
+    - `newsletter_id`: Foreign key referencing the newsletter.
+    - `click_time`: Timestamp of the click activity.
+    - `url`: URL that was clicked.
+
+3. **newsletters**: Stores information about newsletters.
+    - `id`: Unique identifier for the newsletter.
+    - `title`: Title of the newsletter.
+    - `content`: Content of the newsletter.
+    - `sent_date`: Date when the newsletter was sent.
+   
 
 # Usage
 
