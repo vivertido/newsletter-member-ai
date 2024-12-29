@@ -86,6 +86,8 @@ def process_click_activity(list_id, subscriber_hash):
     Returns:
         dict: A summary of processed, skipped, and error counts.
     """
+
+    
     processed_count = 0
     skipped_count = 0
     error_count = 0
