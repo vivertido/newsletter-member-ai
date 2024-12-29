@@ -503,6 +503,7 @@ def fetch_existing_clicks(subscriber_hash):
     Returns:
         set: A set of slugs that have already been clicked by the subscriber.
     """
+    print("Fetching existing clicks")
     try:
         response = supabase.table("click_activity").select("clicked_headline").eq("subscriber_hash", subscriber_hash).execute()
         if response.data:
